@@ -17,7 +17,7 @@ namespace HyperEdit.Model
             return FlightGlobals.ActiveVessel.GetComponent<LanderAttachment>() != null;
         }
 
-        public static void ToggleLanding(double latitude, double longitude, double altitude, CelestialBody body)
+        public static void ToggleLanding(double latitude, double longitude, double altitude, CelestialBody body, Action<double, double, CelestialBody> onManualEdit)
         {
             if (FlightGlobals.fetch == null || FlightGlobals.ActiveVessel == null || body == null)
                 return;
@@ -29,6 +29,7 @@ namespace HyperEdit.Model
                 lander.Longitude = longitude;
                 lander.Altitude = altitude;
                 lander.Body = body;
+                lander.OnManualEdit = onManualEdit;
             }
             else
             {
@@ -266,10 +267,45 @@ namespace HyperEdit.Model
     public class LanderAttachment : MonoBehaviour
     {
         public bool AlreadyTeleported { get; set; }
+        public Action<double, double, CelestialBody> OnManualEdit { get; set; }
         public CelestialBody Body { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public double Altitude { get; set; }
+
+        private readonly object accelLogObject = new object();
+
+        public void Update()
+        {
+            // 0.2 meters per frame
+            var degrees = 0.2 / Body.Radius * (180 / Math.PI);
+            var changed = false;
+            if (GameSettings.TRANSLATE_UP.GetKey())
+            {
+                Latitude -= degrees;
+                changed = true;
+            }
+            if (GameSettings.TRANSLATE_DOWN.GetKey())
+            {
+                Latitude += degrees;
+                changed = true;
+            }
+            if (GameSettings.TRANSLATE_LEFT.GetKey())
+            {
+                Longitude -= degrees / Math.Cos(Latitude * (Math.PI / 180));
+                changed = true;
+            }
+            if (GameSettings.TRANSLATE_RIGHT.GetKey())
+            {
+                Longitude += degrees / Math.Cos(Latitude * (Math.PI / 180));
+                changed = true;
+            }
+            if (changed)
+            {
+                AlreadyTeleported = false;
+                OnManualEdit(Latitude, Longitude, Body);
+            }
+        }
 
         public void FixedUpdate()
         {
@@ -289,6 +325,9 @@ namespace HyperEdit.Model
                 {
                     var accel = (vessel.srf_velocity + vessel.upAxis) * -0.5;
                     vessel.ChangeWorldVelocity(accel);
+                    RateLimitedLogger.Log(accelLogObject,
+                        string.Format("(Happening every frame) Soft-lander changed ship velocity this frame by vector {0},{1},{2} (mag {3})",
+                        accel.x, accel.y, accel.z, accel.magnitude));
                 }
             }
             else
@@ -304,13 +343,12 @@ namespace HyperEdit.Model
                     QuaternionD.AngleAxis(Latitude, Vector3d.forward) * Vector3d.right) -
                     pqs.radius;
                 alt = Math.Max(alt, 0); // Underwater!
-                if (vessel.Landed)
-                    vessel.Landed = false;
-                else if (vessel.Splashed)
-                    vessel.Splashed = false;
-                foreach (var part in vessel.parts.Where(part => part.Modules.OfType<LaunchClamp>().Any()).ToList())
-                    part.Die();
-                TimeWarp.SetRate(0, true); // HoldVesselUnpack is in display frames, not physics frames
+                if (TimeWarp.CurrentRateIndex != 0)
+                {
+                    TimeWarp.SetRate(0, true);
+                    Extensions.Log("Set time warp to index 0");
+                }
+                // HoldVesselUnpack is in display frames, not physics frames
 
                 var teleportPosition = Body.GetRelSurfacePosition(Latitude, Longitude, alt + Altitude);
                 var teleportVelocity = Body.getRFrmVel(teleportPosition + Body.position);

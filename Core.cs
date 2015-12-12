@@ -183,6 +183,7 @@ namespace HyperEdit
 
         public void Update()
         {
+            RateLimitedLogger.Update();
             if ((Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) && Input.GetKeyDown(KeyCode.H))
             {
                 if (View.Window.GameObject.GetComponents<View.Window>().Any(w => w._title == "HyperEdit"))
@@ -224,6 +225,76 @@ namespace HyperEdit
         public static bool Save(this ConfigNode config)
         {
             return config.Save(GetPath(config.name + ".cfg"));
+        }
+    }
+
+    public static class RateLimitedLogger
+    {
+        private const int MaxFrequency = 100; // measured in number of frames
+
+        class Countdown
+        {
+            public string lastMessage;
+            public int framesLeft;
+            public bool needsPrint;
+
+            public Countdown(string msg, int frames)
+            {
+                lastMessage = msg;
+                framesLeft = frames;
+                needsPrint = false;
+            }
+        }
+
+        private static readonly Dictionary<object, Countdown> messages = new Dictionary<object, Countdown>();
+
+        public static void Update()
+        {
+            List<object> toRemove = null;
+            foreach (var kvp in messages)
+            {
+                if (kvp.Value.framesLeft == 0)
+                {
+                    if (kvp.Value.needsPrint)
+                    {
+                        kvp.Value.needsPrint = false;
+                        kvp.Value.framesLeft = MaxFrequency;
+                        Extensions.Log(kvp.Value.lastMessage);
+                    }
+                    else
+                    {
+                        if (toRemove == null)
+                            toRemove = new List<object>();
+                        toRemove.Add(kvp.Key);
+                    }
+                }
+                else
+                {
+                    kvp.Value.framesLeft--;
+                }
+            }
+            if (toRemove != null)
+            {
+                foreach (var key in toRemove)
+                {
+                    messages.Remove(key);
+                }
+            }
+        }
+
+        public static void Log(object key, string message)
+        {
+            Countdown countdown;
+            if (messages.TryGetValue(key, out countdown))
+            {
+                countdown.needsPrint = true;
+                countdown.lastMessage = message;
+            }
+            else
+            {
+                Extensions.Log(message);
+                messages[key] = new Countdown(message, MaxFrequency);
+            }
         }
     }
 
@@ -294,6 +365,39 @@ namespace HyperEdit
             body.sphereOfInfluence = orbit.semiMajorAxis * Math.Pow(body.Mass / orbit.referenceBody.Mass, 2.0 / 5.0);
         }
 
+        public static void PrepVesselTeleport(this Vessel vessel)
+        {
+            if (vessel.Landed)
+            {
+                vessel.Landed = false;
+                Extensions.Log("Set ActiveVessel.Landed = false");
+            }
+            if (vessel.Splashed)
+            {
+                vessel.Splashed = false;
+                Extensions.Log("Set ActiveVessel.Splashed = false");
+            }
+            if (vessel.landedAt != string.Empty)
+            {
+                vessel.landedAt = string.Empty;
+                Extensions.Log("Set ActiveVessel.landedAt = \"\"");
+            }
+            var parts = vessel.parts;
+            if (parts != null)
+            {
+                int killcount = 0;
+                foreach (var part in parts.Where(part => part.Modules.OfType<LaunchClamp>().Any()).ToList())
+                {
+                    killcount++;
+                    part.Die();
+                }
+                if (killcount != 0)
+                {
+                    Extensions.Log(string.Format("Removed {0} launch clamps from {1}", killcount, vessel.vesselName));
+                }
+            }
+        }
+
         public static double Soi(this CelestialBody body)
         {
             var radius = body.sphereOfInfluence * 0.95;
@@ -308,6 +412,26 @@ namespace HyperEdit
             if (result < 0)
                 result += y;
             return result;
+        }
+
+        public static string VesselToString(this Vessel vessel)
+        {
+            if (FlightGlobals.fetch != null && FlightGlobals.ActiveVessel == vessel)
+                return "Active vessel";
+            return vessel.vesselName;
+        }
+
+        public static string OrbitDriverToString(this OrbitDriver driver)
+        {
+            if (driver == null)
+                return null;
+            if (driver.celestialBody != null)
+                return driver.celestialBody.bodyName;
+            if (driver.vessel != null)
+                return driver.vessel.VesselToString();
+            if (!string.IsNullOrEmpty(driver.name))
+                return driver.name;
+            return "Unknown";
         }
 
         private static Dictionary<string, KeyCode> _keyCodeNames;
@@ -340,31 +464,9 @@ namespace HyperEdit
             return true;
         }
 
-        public static string VesselToString(this Vessel vessel)
-        {
-            if (FlightGlobals.fetch != null && FlightGlobals.ActiveVessel == vessel)
-                return "Active vessel";
-            return vessel.vesselName;
-        }
-
         public static string KeyCodeToString(this KeyCode[] values)
         {
             return string.Join("-", values.Select(v => v.ToString()).ToArray());
-        }
-
-        public static string OrbitDriverToString(this OrbitDriver driver)
-        {
-            if (driver == null)
-                return null;
-            var body = FlightGlobals.Bodies.FirstOrDefault(cb => cb.orbitDriver != null && cb.orbitDriver == driver);
-            if (body != null)
-                return body.bodyName;
-            var vessel = FlightGlobals.Vessels.FirstOrDefault(v => v.orbitDriver != null && v.orbitDriver == driver);
-            if (vessel != null)
-                return vessel.VesselToString();
-            if (string.IsNullOrEmpty(driver.name) == false)
-                return driver.name;
-            return "Unknown";
         }
 
         public static string CbToString(this CelestialBody body)
@@ -376,6 +478,11 @@ namespace HyperEdit
         {
             body = FlightGlobals.Bodies == null ? null : FlightGlobals.Bodies.FirstOrDefault(cb => cb.name == bodyName);
             return body != null;
+        }
+
+        public static void ClearGuiFocus()
+        {
+            GUIUtility.keyboardControl = 0;
         }
 
         private static string TrimUnityColor(string value)
