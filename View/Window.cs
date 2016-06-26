@@ -5,40 +5,53 @@ using UnityEngine;
 
 namespace HyperEdit.View
 {
-    static class WindowHelper
+    public static class WindowHelper
     {
         public static void Prompt(string prompt, Action<string> complete)
         {
             var str = "";
             Window.Create(prompt, false, false, 200, 100, w =>
+            {
+                str = GUILayout.TextField(str);
+                if (GUILayout.Button("OK"))
                 {
-                    str = GUILayout.TextField(str);
-                    if (GUILayout.Button("OK"))
-                    {
-                        complete(str);
-                        w.Close();
-                    }
-                });
+                    complete(str);
+                    w.Close();
+                }
+            });
         }
 
-        public static void Selector<T>(string title, IEnumerable<T> elements, Func<T, string> nameSelector, Action<T> onSelect)
+        public static void Error(string message)
         {
-            var collection = elements.Select(t => new { value = t, name = nameSelector(t) }).ToList();
+            Window.Create("Error", false, false, 400, -1, w =>
+            {
+                GUILayout.Label(message);
+                if (GUILayout.Button("OK"))
+                {
+                    w.Close();
+                }
+            });
+        }
+
+        public static void Selector<T>(string title, IEnumerable<T> elements, Func<T, string> nameSelector,
+            Action<T> onSelect)
+        {
+            var collection = elements.Select(t => new {value = t, name = nameSelector(t)}).ToList();
             var scrollPos = new Vector2();
             Window.Create(title, false, false, 300, 500, w =>
+            {
+                scrollPos = GUILayout.BeginScrollView(scrollPos);
+                foreach (var item in collection)
                 {
-                    scrollPos = GUILayout.BeginScrollView(scrollPos);
-                    foreach (var item in collection)
+                    if (GUILayout.Button(item.name))
                     {
-                        if (GUILayout.Button(item.name))
-                        {
-                            onSelect(item.value);
-                            w.Close();
-                            return;
-                        }
+                        onSelect(item.value);
+                        w.Close();
+                        return;
                     }
-                    GUILayout.EndScrollView();
-                });
+                }
+                GUILayout.EndScrollView();
+            });
         }
     }
 
@@ -79,32 +92,33 @@ namespace HyperEdit.View
             }
         }
 
-        private static bool SaveWindowPos()
+        private static void SaveWindowPos()
         {
-            return WindowPos.Save();
+            WindowPos.Save();
         }
 
         public static event Action<bool> AreWindowsOpenChange;
 
         private string _tempTooltip;
         private string _oldTooltip;
-        internal string _title;
+        internal string Title;
         private bool _shrinkHeight;
         private Rect _windowRect;
         private Action<Window> _drawFunc;
         private bool _isOpen;
 
-        public static void Create(string title, bool savepos, bool ensureUniqueTitle, int width, int height, Action<Window> drawFunc)
+        public static void Create(string title, bool savepos, bool ensureUniqueTitle, int width, int height,
+            Action<Window> drawFunc)
         {
             var allOpenWindows = GameObject.GetComponents<Window>();
-            if (ensureUniqueTitle && allOpenWindows.Any(w => w._title == title))
+            if (ensureUniqueTitle && allOpenWindows.Any(w => w.Title == title))
             {
                 Extensions.Log("Not opening window \"" + title + "\", already open");
                 return;
             }
 
-            int winx = 100;
-            int winy = 100;
+            var winx = 100;
+            var winy = 100;
             if (savepos)
             {
                 var winposNode = WindowPos.GetNode(title.Replace(' ', '_'));
@@ -120,8 +134,8 @@ namespace HyperEdit.View
             }
             else
             {
-                winx = (Screen.width - width) / 2;
-                winy = (Screen.height - height) / 2;
+                winx = (Screen.width - width)/2;
+                winy = (Screen.height - height)/2;
             }
 
             var window = GameObject.AddComponent<Window>();
@@ -129,11 +143,11 @@ namespace HyperEdit.View
             window._shrinkHeight = height == -1;
             if (window._shrinkHeight)
                 height = 5;
-            window._title = title;
+            window.Title = title;
             window._windowRect = new Rect(winx, winy, width, height);
             window._drawFunc = drawFunc;
-            if (allOpenWindows.Length == 0 && AreWindowsOpenChange != null)
-                AreWindowsOpenChange(true);
+            if (allOpenWindows.Length == 0)
+                AreWindowsOpenChange?.Invoke(true);
         }
 
         private Window()
@@ -150,19 +164,17 @@ namespace HyperEdit.View
         public void OnGUI()
         {
             GUI.skin = HighLogic.Skin;
-            _windowRect = GUILayout.Window(GetInstanceID(), _windowRect, DrawWindow, _title, GUILayout.ExpandHeight(true));
+            _windowRect = GUILayout.Window(GetInstanceID(), _windowRect, DrawWindow, Title, GUILayout.ExpandHeight(true));
 
-            if (string.IsNullOrEmpty(_oldTooltip) == false)
-            {
-                var rect = new Rect(_windowRect.xMin, _windowRect.yMax, _windowRect.width, 50);
-                GUI.Label(rect, _oldTooltip);
-            }
+            if (string.IsNullOrEmpty(_oldTooltip))
+                return;
+            var rect = new Rect(_windowRect.xMin, _windowRect.yMax, _windowRect.width, 50);
+            GUI.Label(rect, _oldTooltip);
         }
 
         private void DrawWindow(int windowId)
         {
             GUILayout.BeginVertical();
-            //if (GUILayout.Button("Close"))
             if (GUI.Button(new Rect(_windowRect.width - 18, 2, 16, 16), "X")) // X button from mechjeb
                 Close();
             _drawFunc(this);
@@ -175,16 +187,16 @@ namespace HyperEdit.View
 
         public void Close()
         {
-            ConfigNode node = new ConfigNode(_title.Replace(' ', '_'));
-            node.AddValue("x", (int)_windowRect.x);
-            node.AddValue("y", (int)_windowRect.y);
+            var node = new ConfigNode(Title.Replace(' ', '_'));
+            node.AddValue("x", (int) _windowRect.x);
+            node.AddValue("y", (int) _windowRect.y);
             if (WindowPos.SetNode(node.name, node) == false)
                 WindowPos.AddNode(node);
             SaveWindowPos();
             _isOpen = false;
             Destroy(this);
-            if (GameObject.GetComponents<Window>().Any(w => w._isOpen) == false && AreWindowsOpenChange != null)
-                AreWindowsOpenChange(false);
+            if (GameObject.GetComponents<Window>().Any(w => w._isOpen) == false)
+                AreWindowsOpenChange?.Invoke(false);
         }
 
         internal static void CloseAll()

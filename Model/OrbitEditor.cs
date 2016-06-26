@@ -22,7 +22,7 @@ namespace HyperEdit.Model
 
         public static void Simple(OrbitDriver currentlyEditing, double altitude, CelestialBody body)
         {
-            SetOrbit(currentlyEditing, CreateOrbit(0, 0, altitude + body.Radius, 0, 0, 0, 0, body));
+            SetOrbit(currentlyEditing, CreateOrbit(0 , 0, altitude + body.Radius, 0, 0, 0, 0, body));
         }
 
         public static void GetSimple(OrbitDriver currentlyEditing, out double altitude, out CelestialBody body)
@@ -190,14 +190,18 @@ namespace HyperEdit.Model
 
         private static Orbit CreateOrbit(double inc, double e, double sma, double lan, double w, double mEp, double epoch, CelestialBody body)
         {
+			if (inc == 0)
+				inc = 0.0001d;
             if (double.IsNaN(inc))
-                inc = 0;
+				inc = 0.0001d;
             if (double.IsNaN(e))
                 e = 0;
             if (double.IsNaN(sma))
                 sma = body.Radius + body.atmosphereDepth + 10000;
-            if (double.IsNaN(lan))
-                lan = 0;
+			if (double.IsNaN(lan))
+				lan = 0.0001d;
+			if (lan == 0)
+				lan = 0.0001d;
             if (double.IsNaN(w))
                 w = 0;
             if (double.IsNaN(mEp))
@@ -215,6 +219,14 @@ namespace HyperEdit.Model
                 while (mEp > Math.PI * 2)
                     mEp -= Math.PI * 2;
             }
+
+			// "inc" is probably inclination
+			// "e" is probably eccentricity
+			// "sma" is probably semi-major axis
+			// "lan" is probably longitude of the ascending node
+			// "w" is probably the argument of periapsis (omega)
+			// mEp is probably a mean anomaly at some time, like epoch
+			// t is probably current time
 
             return new Orbit(inc, e, sma, lan, w, mEp, epoch, body);
         }
@@ -236,12 +248,12 @@ namespace HyperEdit.Model
             var destinationMagnitude = newOrbit.getRelativePositionAtUT(Planetarium.GetUniversalTime()).magnitude;
             if (destinationMagnitude > newOrbit.referenceBody.sphereOfInfluence)
             {
-                Extensions.ErrorPopup("Destination position was above the sphere of influence");
+                View.WindowHelper.Error("Destination position was above the sphere of influence");
                 return;
             }
             if (destinationMagnitude < newOrbit.referenceBody.Radius)
             {
-                Extensions.ErrorPopup("Destination position was below the surface");
+                View.WindowHelper.Error("Destination position was below the surface");
                 return;
             }
 
@@ -256,8 +268,8 @@ namespace HyperEdit.Model
                 Extensions.Log("OrbitPhysicsManager.HoldVesselUnpack threw NullReferenceException");
             }
 
-            var allVessels = FlightGlobals.fetch == null ? (IEnumerable<Vessel>)new[] { vessel } : FlightGlobals.Vessels;
-            foreach (var v in allVessels.Where(v => v.packed == false))
+            var allVessels = FlightGlobals.fetch?.vessels ?? (IEnumerable<Vessel>)new[] { vessel };
+            foreach (var v in allVessels)
                 v.GoOnRails();
 
             var oldBody = vessel.orbitDriver.orbit.referenceBody;
@@ -304,13 +316,10 @@ namespace HyperEdit.Model
             orbit.UpdateFromUT(Planetarium.GetUniversalTime());
             if (orbit.referenceBody != newOrbit.referenceBody)
             {
-                if (orbitDriver.OnReferenceBodyChange != null)
-                    orbitDriver.OnReferenceBodyChange(newOrbit.referenceBody);
+                orbitDriver.OnReferenceBodyChange?.Invoke(newOrbit.referenceBody);
             }
             RateLimitedLogger.Log(HardsetOrbitLogObject,
-                string.Format("Orbit \"{0}\" changed to: inc={1} ecc={2} sma={3} lan={4} argpe={5} mep={6} epoch={7} refbody={8}",
-                orbitDriver.OrbitDriverToString(), orbit.inclination, orbit.eccentricity, orbit.semiMajorAxis,
-                orbit.LAN, orbit.argumentOfPeriapsis, orbit.meanAnomalyAtEpoch, orbit.epoch, orbit.referenceBody.CbToString()));
+                $"Orbit \"{orbitDriver.OrbitDriverToString()}\" changed to: inc={orbit.inclination} ecc={orbit.eccentricity} sma={orbit.semiMajorAxis} lan={orbit.LAN} argpe={orbit.argumentOfPeriapsis} mep={orbit.meanAnomalyAtEpoch} epoch={orbit.epoch} refbody={orbit.referenceBody.CbToString()}");
         }
 
         public static Orbit Clone(this Orbit o)

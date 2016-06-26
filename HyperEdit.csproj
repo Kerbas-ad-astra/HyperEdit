@@ -8,6 +8,9 @@
     <RootNamespace>HyperEdit</RootNamespace>
     <AssemblyName>HyperEdit</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
     <NoConfig>true</NoConfig>
     <NoStdLib>true</NoStdLib>
     <KspInstallDir Condition=" '$(KspInstallDir)' == '' ">..\KSP_linux</KspInstallDir>
@@ -20,26 +23,48 @@
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug</OutputPath>
     <DefineConstants>DEBUG;</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <Optimize>true</Optimize>
     <OutputPath>bin\Release</OutputPath>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="$(KspLibPath)\mscorlib.dll"/>
-    <Reference Include="$(KspLibPath)\System.Core.dll"/>
-    <Reference Include="$(KspLibPath)\UnityEngine.dll"/>
-    <Reference Include="$(KspLibPath)\Assembly-CSharp.dll"/>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
+    </Reference>
+    <Reference Include="KSPUtil">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\KSPUtil.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\UnityEngine.UI.dll</HintPath>
+    </Reference>
+    <Reference Include="mscorlib">
+      <HintPath>..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\mscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Core">
+      <HintPath>..\..\..\..\Program Files %28x86%29\Steam\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\System.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="KSPAssets">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\KSPAssets.dll</HintPath>
+    </Reference>
+    <Reference Include="KSPCore">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\KSPCore.dll</HintPath>
+    </Reference>
+    <Reference Include="Vectrosity">
+      <HintPath>..\..\..\Games\Kerbal Space Program\KSP_win\KSP_Data\Managed\Vectrosity.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Core.cs" />
-    <Compile Include="Model\HeatEditor.cs" />
     <Compile Include="Model\Lander.cs" />
     <Compile Include="Model\MiscEditor.cs" />
     <Compile Include="Model\OrbitEditor.cs" />
@@ -56,11 +81,11 @@
     <Compile Include="View\Window.cs" />
     <Compile Include="Model\SiSuffix.cs" />
   </ItemGroup>
-  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
     <None Include="HyperEdit.version" />
     <None Include="README.md" />
   </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Target Name="AfterBuild">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(KspOutputPath)" />
   </Target>
